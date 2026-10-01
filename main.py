@@ -40,7 +40,7 @@ TEMPLATES_PAGES = {
         [InlineKeyboardButton("تحويل صيغ", callback_data="tpl_convert")],
         [InlineKeyboardButton("استخراج روابط القنوات", callback_data="tpl_extract")],
         [InlineKeyboardButton("ناسخ الكتابة", callback_data="tpl_copy")],
-        [InlineKeyboardButton("➡️ الصفحة التالية", callback_data="page_2")]
+        [InlineKeyboardButton("➡️️ الصفحة التالية", callback_data="page_2")]
     ],
     2: [
         [InlineKeyboardButton("سمسمي", callback_data="tpl_simsimi")],
@@ -228,7 +228,7 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     owner_id = update.effective_user.id
 
     if ":" not in user_token or len(user_token) < 20:
-        await update.message.reply_text("❌ التوكن غير صحيح، تأكد منه من BotFather وأرسله مجدداً أو أرسل /cancel للإلغاء.")
+        await update.message.reply_text("❌ التوكن غير صحيح، تأكد منه من BotFather وأرسل مجدداً أو أرسل /cancel للإلغاء.")
         return WAITING_FOR_TOKEN
 
     await update.message.reply_text("⏳ جاري فحص التوكن وتشغيل البوت في الخلفية...")
@@ -270,12 +270,11 @@ async def my_bots_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         bots_text = f"❌ **ليس لديك أي بوتات مصنوعة حتى الآن.**\nيمكنك الضغط على '🤖 إنشاء بوت جديد' لإضافة بوتك الأول!{RIGHTS}"
 
-    await update.message.reply_text(bots_text, parse_mode='Markdown')
+    await update.message.reply_text(bots_text, parse_message='Markdown')
 
 def main():
     app = Application.builder().token(MAIN_TOKEN).build()
 
-    # محادثة آمنة ومنفصلة لاستلام التوكن بعد اختيار القالب
     conv_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(template_select_callback, pattern="^tpl_")],
         states={
@@ -291,11 +290,14 @@ def main():
     app.add_handler(CallbackQueryHandler(check_sub_button, pattern="^check_sub$"))
     app.add_handler(CallbackQueryHandler(handle_pagination, pattern="^(page_|noop)$"))
     app.add_handler(conv_handler)
-    app.add_handler(MessageHandler(filters.Regex("^(🤖 إنشاء بوت جديد|إنشاء بوت جديد)$"), show_templates))
-    app.add_handler(MessageHandler(filters.Regex("^(📋 البوتات الخاصة بي|البوتات الخاصة بي)$"), my_bots_list))
+    
+    # معالجات الأزرار النصية السفليّة بمرونة تامة
+    app.add_handler(MessageHandler(filters.Regex("إنشاء بوت جديد"), show_templates))
+    app.add_handler(MessageHandler(filters.Regex("البوتات الخاصة بي"), my_bots_list))
 
     print("البوت الرئيسي ومحرك تشغيل البوتات يعملان بنجاح...")
     app.run_polling()
 
-if __name__ == "main":
+if __name__ == "__main__":
     main()
+        
