@@ -1,9 +1,11 @@
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+import asyncio
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
+    CallbackQueryHandler,
     ContextTypes,
     ConversationHandler,
     filters
@@ -12,11 +14,9 @@ from telegram.ext import (
 # ------------------- الإعدادات الرئيسية -------------------
 MAIN_TOKEN = "6941144530:AAEDOz4PVOXmFv9n_rCS5Sx8EpkFpkGj4QE"
 
-# معرف القناة ورابطها للاشتراك الإجباري
 CHANNEL_USERNAME = "@on1mix"
 CHANNEL_LINK = "https://t.me/on1mix"
 
-# حقوق البوت
 RIGHTS_NAME = "👑 مستر أحمد | ON.Mix"
 RIGHTS = f"\n\n—\n{RIGHTS_NAME}"
 
@@ -27,15 +27,118 @@ logging.basicConfig(
     level=logging.INFO
 )
 
+# تخزين البوتات المشغلة في الذاكرة
+RUNNING_BOTS = {}
+
+# ------------------- قوائم قوالب البوتات -------------------
+TEMPLATES_PAGES = {
+    1: [
+        [InlineKeyboardButton("تواصل (شغال ✅)", callback_data="tpl_contact")],
+        [InlineKeyboardButton("بوت الازرار (شغال ✅)", callback_data="tpl_buttons")],
+        [InlineKeyboardButton("زخرفة (شغال ✅)", callback_data="tpl_zakhrafa")],
+        [InlineKeyboardButton("معاني اسماء (شغال ✅)", callback_data="tpl_names")],
+        [InlineKeyboardButton("تحويل صيغ", callback_data="tpl_convert")],
+        [InlineKeyboardButton("استخراج روابط القنوات", callback_data="tpl_extract")],
+        [InlineKeyboardButton("ناسخ الكتابة", callback_data="tpl_copy")],
+        [InlineKeyboardButton("➡️ الصفحة التالية", callback_data="page_2")]
+    ],
+    2: [
+        [InlineKeyboardButton("سمسمي", callback_data="tpl_simsimi")],
+        [InlineKeyboardButton("تحقق من الوهمي", callback_data="tpl_check_fake")],
+        [InlineKeyboardButton("صانع كودات جاهزة", callback_data="tpl_code_maker")],
+        [InlineKeyboardButton("صانع لوجو", callback_data="tpl_logo")],
+        [InlineKeyboardButton("ترجمه", callback_data="tpl_translate")],
+        [InlineKeyboardButton("حساب العمر", callback_data="tpl_age")],
+        [
+            InlineKeyboardButton("⬅️", callback_data="page_1"),
+            InlineKeyboardButton("2/5", callback_data="noop"),
+            InlineKeyboardButton("➡️", callback_data="page_3")
+        ]
+    ],
+    3: [
+        [InlineKeyboardButton("البلورة السحرية", callback_data="tpl_ball")],
+        [InlineKeyboardButton("بروكسي", callback_data="tpl_proxy")],
+        [InlineKeyboardButton("تحويل صوت ⇄ كتابة", callback_data="tpl_speech_text")],
+        [InlineKeyboardButton("إصلاح جودة الصورة", callback_data="tpl_fix_img")],
+        [InlineKeyboardButton("صارحني", callback_data="tpl_sarahne")],
+        [
+            InlineKeyboardButton("⬅️", callback_data="page_2"),
+            InlineKeyboardButton("3/5", callback_data="noop"),
+            InlineKeyboardButton("➡️", callback_data="page_4")
+        ]
+    ],
+    4: [
+        [InlineKeyboardButton("الجني الازرق", callback_data="tpl_akinator")],
+        [InlineKeyboardButton("ايميل موقت", callback_data="tpl_temp_mail")],
+        [InlineKeyboardButton("التحدث مع الذكاء الاصطناعي", callback_data="tpl_ai_chat")],
+        [InlineKeyboardButton("حماية القنوات", callback_data="tpl_protect_channel")],
+        [
+            InlineKeyboardButton("⬅️", callback_data="page_3"),
+            InlineKeyboardButton("4/5", callback_data="noop"),
+            InlineKeyboardButton("➡️", callback_data="page_5")
+        ]
+    ],
+    5: [
+        [InlineKeyboardButton("بوت المسابقات", callback_data="tpl_contests")],
+        [InlineKeyboardButton("تمويل قنوات", callback_data="tpl_funding")],
+        [
+            InlineKeyboardButton("⬅️", callback_data="page_4"),
+            InlineKeyboardButton("5/5", callback_data="noop")
+        ]
+    ]
+}
+
+# ------------------- محرك تشغيل البوتات الفرعية -------------------
+async def start_sub_bot(token: str, template_type: str, owner_id: int):
+    """يقوم بتشغيل بوت فرعي جديد في الخلفية بناءً على القالب المختار"""
+    try:
+        sub_app = Application.builder().token(token).build()
+
+        # دالة Start للبوت الفرعي
+        async def sub_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            await update.message.reply_text(f"أهلاً بك في البوت! هذا البوت مصنوع عبر شبكة {RIGHTS_NAME}")
+
+        sub_app.add_handler(CommandHandler("start", sub_start))
+
+        # برمجة منطق القوالب الحية
+        if template_type == "tpl_zakhrafa":
+            async def zakhrafa_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+                text = update.message.text
+                res = f"✨ **زخرفة نصك:**\n\n1️⃣ `{text}`\n2️⃣ `★ {text} ★`\n3️⃣ `✧ {text} ✧`"
+                await update.message.reply_text(res, parse_mode="Markdown")
+            sub_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, zakhrafa_handler))
+
+        elif template_type == "tpl_contact":
+            async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+                if update.effective_user.id != owner_id:
+                    await context.bot.send_message(chat_id=owner_id, text=f"📩 **رسالة جديدة من:** {update.effective_user.first_name}\n\n{update.message.text}")
+                    await update.message.reply_text("✅ تم إرسال رسالتك للمالك بنجاح!")
+            sub_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, contact_handler))
+
+        elif template_type == "tpl_buttons":
+            async def buttons_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+                kb = [[InlineKeyboardButton("قناة المالك", url=CHANNEL_LINK)]]
+                await update.message.reply_text("مرحباً بك! اضغط على الزر أدناه:", reply_markup=InlineKeyboardMarkup(kb))
+            sub_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, buttons_handler))
+
+        # بدء التشغيل في الخلفية
+        await sub_app.initialize()
+        await sub_app.start()
+        await sub_app.updater.start_polling()
+        
+        RUNNING_BOTS[token] = sub_app
+        return True
+    except Exception as e:
+        logging.error(f"Error starting sub-bot: {e}")
+        return False
+
 # ------------------- فحص الاشتراك الإجباري -------------------
 async def check_subscription(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
     try:
         member = await context.bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=user_id)
-        if member.status in ['creator', 'administrator', 'member']:
-            return True
-        return False
+        return member.status in ['creator', 'administrator', 'member']
     except Exception:
-        return True
+        return False
 
 async def send_sub_request(update: Update):
     keyboard = [
@@ -44,84 +147,141 @@ async def send_sub_request(update: Update):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     text = f"⚠️ **عذراً يا صديقي!**\n\nيجب عليك الاشتراك في قناة البوت أولاً لاستخدام الخدمات:\n{CHANNEL_LINK}{RIGHTS}"
-    await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    if update.message:
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+    elif update.callback_query:
+        await update.callback_query.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
 
-# ------------------- القوائم والأوامر القديمة الكاملة -------------------
+async def check_sub_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    is_subbed = await check_subscription(query.from_user.id, context)
+    if is_subbed:
+        await query.message.reply_text("✅ شكراً لاشتراكك! يمكنك الآن استخدام البوت بالكامل أرسل /start")
+    else:
+        await query.message.reply_text("❌ لم تشترك في القناة بعد! يرجى الاشتراك ثم المحاولة مرة أخرى.")
+
+# ------------------- الأوامر والقوائم -------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     
-    # فحص الاشتراك الإجباري أولاً
-    is_subscribed = await check_subscription(user.id, context)
-    if not is_subscribed:
+    if not await check_subscription(user.id, context):
         await send_sub_request(update)
         return
 
-    # القائمة الرئيسية القديمة بأزرارها
-    user_keyboard = [
-        ["🤖 صنع بوت جديد", "📋 قائمة بوتاتك"],
-        ["❓ كيف اصنع بوت؟"]
+    main_keyboard = [
+        ["🤖 إنشاء بوت جديد", "📋 البوتات الخاصة بي"],
+        ["⚙️ إعدادات عامة لجميع البوتات"],
+        ["📊 إحصائيات البوتات الخاصة بي"],
+        ["🌐 تغيير اللغة"],
+        ["🚀 قناة التحديثات"],
+        ["❓ ما هو صانع خدمات ON.Mix؟", "📜 شروط الخدمة"]
     ]
-    reply_markup = ReplyKeyboardMarkup(user_keyboard, resize_keyboard=True)
+    reply_markup = ReplyKeyboardMarkup(main_keyboard, resize_keyboard=True)
 
     message_text = (
-        f"أهلاً بك يا {user.first_name} 👋\n\n"
-        f"مرحباً بك في أحدث بوتات شبكة {RIGHTS_NAME} 🚀\n"
-        f"اختر من القائمة أدناه ما تريد القيام به👇"
+        f"🚀 **أنشئ بوتك الآن بسهولة وسرعة!**\n"
+        f"اختر القالب، أضف التوكن، وسيكون البوت جاهزاً للعمل ⚡\n\n"
+        f"✨ **المميزات:**\n"
+        f"• بدون الحاجة إلى أكواد أو تعقيدات\n"
+        f"• قالب ذكية وجاهزة\n"
+        f"• استضافة آمنة وفورية\n\n"
+        f"💡 **ابداً الآن وصمم بوتك في أقل من نصف دقيقة!**{RIGHTS}"
     )
-    await update.message.reply_text(text=message_text, reply_markup=reply_markup)
+    await update.message.reply_text(text=message_text, reply_markup=reply_markup, parse_mode='Markdown')
 
-async def how_to_make_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    explanation_text = (
-        f"📖 **شرح كيفية عمل بوت جديد عبر BotFather:**\n\n"
-        f"1️⃣ اذهب إلى بوت @BotFather\n"
-        f"2️⃣ أرسل الأمر `/newbot`\n"
-        f"3️⃣ أدخل اسمًا للبوت الخاص بك\n"
-        f"4️⃣ أدخل معرفًا (Username) ينتهي بـ `bot`\n"
-        f"5️⃣ سيمنحك BotFather **توكن (Token)** خاصاً بك\n"
-        f"6️⃣ انسخ التوكن وأرسله هنا عند الضغط على 'صنع بوت جديد'{RIGHTS}"
-    )
-    await update.message.reply_text(explanation_text, parse_mode='Markdown')
+async def show_templates(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    reply_markup = InlineKeyboardMarkup(TEMPLATES_PAGES[1])
+    text = f"💡 **نصيحة:** اضغط على اسم البوت لبدء إنشائه{RIGHTS}"
+    await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
 
-async def ask_for_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        f"من فضلك أرسل التوكن الخاص بـ بوتك الآن:\nمثال: `123456789:ABCdefGhIJKlmNoPQRsT`",
-        parse_mode="Markdown"
-    )
-    return WAITING_FOR_TOKEN
+async def handle_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    if data.startswith("page_"):
+        page_num = int(data.split("_")[1])
+        reply_markup = InlineKeyboardMarkup(TEMPLATES_PAGES[page_num])
+        text = f"💡 **نصيحة:** اضغط على اسم البوت لبدء إنشائه{RIGHTS}"
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+    elif data.startswith("tpl_"):
+        context.user_data['selected_template'] = data
+        await query.message.reply_text(
+            f"أرسل الآن **التوكن (Token)** الخاص ببوتك من @BotFather للبدء في تشغيله فوراً:",
+            parse_mode="Markdown"
+        )
+        return WAITING_FOR_TOKEN
 
 async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_token = update.message.text.strip()
+    selected_tpl = context.user_data.get('selected_template', 'tpl_zakhrafa')
+    owner_id = update.effective_user.id
+
     if ":" not in user_token or len(user_token) < 20:
-        await update.message.reply_text("❌ التوكن غير صحيح، تأكد منه وأرسله مجدداً.")
+        await update.message.reply_text("❌ التوكن غير صحيح، تأكد منه من BotFather وأرسله مجدداً.")
         return WAITING_FOR_TOKEN
+
+    await update.message.reply_text("⏳ جاري فحص التوكن وتشغيل البوت في الخلفية...")
     
-    with open("user_bots.txt", "a") as f:
-        f.write(f"{update.effective_user.id}:{user_token}\n")
+    # تشغيل البوت الفرعي
+    success = await start_sub_bot(user_token, selected_tpl, owner_id)
+    
+    if success:
+        with open("user_bots.txt", "a") as f:
+            f.write(f"{owner_id}:{user_token}:{selected_tpl}\n")
+        await update.message.reply_text(f"🎉 **مبروك! تم تشغيل بوتك بنجاح وهو يعمل الآن على تليجرام!**{RIGHTS}", parse_mode="Markdown")
+    else:
+        await update.message.reply_text("❌ فشل تشغيل البوت. تأكد من صحة التوكن أو أنه غير مستخدم في مكان آخر.")
 
-    await update.message.reply_text(f"✅ تم حفظ التوكن بنجاح! جاري تشغيل بوتك...{RIGHTS}")
     return ConversationHandler.END
 
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("تم إلغاء العملية.")
-    return ConversationHandler.END
+async def my_bots_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    user_bots = []
+    
+    try:
+        with open("user_bots.txt", "r") as f:
+            lines = f.readlines()
+            for line in lines:
+                if line.startswith(user_id + ":"):
+                    parts = line.strip().split(":")
+                    user_bots.append(parts[1])
+    except FileNotFoundError:
+        pass
+
+    if user_bots:
+        bots_text = "📋 **قائمة بوتاتك النشطة والمصنوعة:**\n\n"
+        for idx, bot_token in enumerate(user_bots, 1):
+            bots_text += f"{idx}. `...{bot_token[-10:]}` 🟢 (شغال)\n"
+        bots_text += f"{RIGHTS}"
+    else:
+        bots_text = f"❌ **ليس لديك أي بوتات مصنوعة حتى الآن.**\nيمكنك الضغط على '🤖 إنشاء بوت جديد' لإضافة بوتك الأول!{RIGHTS}"
+
+    await update.message.reply_text(bots_text, parse_mode='Markdown')
 
 def main():
     app = Application.builder().token(MAIN_TOKEN).build()
 
     conv_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex("^🤖 صنع بوت جديد$"), ask_for_token)],
+        entry_points=[CallbackQueryHandler(handle_pagination, pattern="^tpl_")],
         states={
             WAITING_FOR_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_token)]
         },
-        fallbacks=[CommandHandler("cancel", cancel)]
+        fallbacks=[]
     )
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.Regex("^❓ كيف اصنع بوت؟$"), how_to_make_bot))
+    app.add_handler(CallbackQueryHandler(check_sub_button, pattern="^check_sub$"))
+    app.add_handler(CallbackQueryHandler(handle_pagination, pattern="^(page_|noop)"))
     app.add_handler(conv_handler)
+    app.add_handler(MessageHandler(filters.Regex("^(🤖 إنشاء بوت جديد|إنشاء بوت جديد)$"), show_templates))
+    app.add_handler(MessageHandler(filters.Regex("^(📋 البوتات الخاصة بي|البوتات الخاصة بي)$"), my_bots_list))
 
-    print("البوت يعمل الآن بنجاح...")
+    print("البوت الرئيسي ومحرك تشغيل البوتات يعملان بنجاح...")
     app.run_polling()
 
 if __name__ == "__main__":
     main()
+        
