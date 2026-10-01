@@ -30,7 +30,7 @@ logging.basicConfig(
 # تخزين البوتات المشغلة في الذاكرة
 RUNNING_BOTS = {}
 
-# ------------------- قوائم قوالب البوتات -------------------
+# ------------------- قوائم قوالب البوتات (5 صفحات) -------------------
 TEMPLATES_PAGES = {
     1: [
         [InlineKeyboardButton("تواصل (شغال ✅)", callback_data="tpl_contact")],
@@ -94,13 +94,11 @@ async def start_sub_bot(token: str, template_type: str, owner_id: int):
     try:
         sub_app = Application.builder().token(token).build()
 
-        # دالة Start للبوت الفرعي
         async def sub_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"أهلاً بك في البوت! هذا البوت مصنوع عبر شبكة {RIGHTS_NAME}")
 
         sub_app.add_handler(CommandHandler("start", sub_start))
 
-        # برمجة منطق القوالب الحية
         if template_type == "tpl_zakhrafa":
             async def zakhrafa_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text = update.message.text
@@ -121,7 +119,6 @@ async def start_sub_bot(token: str, template_type: str, owner_id: int):
                 await update.message.reply_text("مرحباً بك! اضغط على الزر أدناه:", reply_markup=InlineKeyboardMarkup(kb))
             sub_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, buttons_handler))
 
-        # بدء التشغيل في الخلفية
         await sub_app.initialize()
         await sub_app.start()
         await sub_app.updater.start_polling()
@@ -162,7 +159,7 @@ async def check_sub_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await query.message.reply_text("❌ لم تشترك في القناة بعد! يرجى الاشتراك ثم المحاولة مرة أخرى.")
 
-# ------------------- الأوامر والقوائم -------------------
+# ------------------- الأوامر ومعالجة القوائم -------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     
@@ -185,9 +182,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"اختر القالب، أضف التوكن، وسيكون البوت جاهزاً للعمل ⚡\n\n"
         f"✨ **المميزات:**\n"
         f"• بدون الحاجة إلى أكواد أو تعقيدات\n"
-        f"• قالب ذكية وجاهزة\n"
+        f"• قوالب ذكية وجاهزة\n"
         f"• استضافة آمنة وفورية\n\n"
-        f"💡 **ابداً الآن وصمم بوتك في أقل من نصف دقيقة!**{RIGHTS}"
+        f"💡 **ابدأ الآن وصمم بوتك في أقل من نصف دقيقة!**{RIGHTS}"
     )
     await update.message.reply_text(text=message_text, reply_markup=reply_markup, parse_mode='Markdown')
 
@@ -204,7 +201,7 @@ async def handle_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("page_"):
         page_num = int(data.split("_")[1])
         reply_markup = InlineKeyboardMarkup(TEMPLATES_PAGES[page_num])
-        text = f"💡 **نصيحة:** اضغط على اسم البوت لبدء إنشائه{RIGHTS}"
+        text = f"💡 **نصيحة:** اضغط على اسم البوت لبدء إنشائه (الصفحة {page_num}/5){RIGHTS}"
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
     elif data.startswith("tpl_"):
         context.user_data['selected_template'] = data
@@ -225,7 +222,6 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("⏳ جاري فحص التوكن وتشغيل البوت في الخلفية...")
     
-    # تشغيل البوت الفرعي
     success = await start_sub_bot(user_token, selected_tpl, owner_id)
     
     if success:
@@ -235,6 +231,10 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("❌ فشل تشغيل البوت. تأكد من صحة التوكن أو أنه غير مستخدم في مكان آخر.")
 
+    return ConversationHandler.END
+
+async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("❌ تم إلغاء العملية.")
     return ConversationHandler.END
 
 async def my_bots_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -267,14 +267,17 @@ def main():
     conv_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(handle_pagination, pattern="^tpl_")],
         states={
-            WAITING_FOR_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_token)]
+            WAITING_FOR_TOKEN: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_token),
+                CommandHandler("cancel", cancel_conversation)
+            ]
         },
-        fallbacks=[]
+        fallbacks=[CommandHandler("cancel", cancel_conversation)]
     )
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(check_sub_button, pattern="^check_sub$"))
-    app.add_handler(CallbackQueryHandler(handle_pagination, pattern="^(page_|noop)"))
+    app.add_handler(CallbackQueryHandler(handle_pagination, pattern="^(page_|noop|tpl_)"))
     app.add_handler(conv_handler)
     app.add_handler(MessageHandler(filters.Regex("^(🤖 إنشاء بوت جديد|إنشاء بوت جديد)$"), show_templates))
     app.add_handler(MessageHandler(filters.Regex("^(📋 البوتات الخاصة بي|البوتات الخاصة بي)$"), my_bots_list))
@@ -284,4 +287,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-        
+    
