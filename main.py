@@ -90,7 +90,6 @@ TEMPLATES_PAGES = {
 
 # ------------------- محرك تشغيل البوتات الفرعية -------------------
 async def start_sub_bot(token: str, template_type: str, owner_id: int):
-    """يقوم بتشغيل بوت فرعي جديد في الخلفية بناءً على القالب المختار"""
     try:
         sub_app = Application.builder().token(token).build()
 
@@ -190,9 +189,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_templates(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(TEMPLATES_PAGES[1])
-    text = f"💡 **نصيحة:** اضغط على اسم البوت لبدء إنشائه{RIGHTS}"
+    text = f"💡 **نصيحة:** اضغط على اسم الخدمة أو القالب لبدء إنشائه{RIGHTS}"
     await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
 
+# معالجة التنقل بين صفحات القوالب
 async def handle_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -201,15 +201,26 @@ async def handle_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("page_"):
         page_num = int(data.split("_")[1])
         reply_markup = InlineKeyboardMarkup(TEMPLATES_PAGES[page_num])
-        text = f"💡 **نصيحة:** اضغط على اسم البوت لبدء إنشائه (الصفحة {page_num}/5){RIGHTS}"
+        text = f"💡 **نصيحة:** اضغط على اسم الخدمة أو القالب لبدء إنشائه (الصفحة {page_num}/5){RIGHTS}"
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
-    elif data.startswith("tpl_"):
-        context.user_data['selected_template'] = data
-        await query.message.reply_text(
-            f"أرسل الآن **التوكن (Token)** الخاص ببوتك من @BotFather للبدء في تشغيله فوراً:",
-            parse_mode="Markdown"
-        )
-        return WAITING_FOR_TOKEN
+    elif data == "noop":
+        pass
+
+# معالجة اختيار القالب لبدء المحادثة واستلام التوكن
+async def template_select_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    context.user_data['selected_template'] = query.data
+    template_name = query.data.replace("tpl_", "")
+    
+    await query.message.reply_text(
+        f"تم اختيار القالب بنجاح (`{template_name}`).\n\n"
+        f"أرسل الآن **التوكن (Token)** الخاص ببوتك من @BotFather للبدء في تشغيله فوراً:\n"
+        f"*(أو أرسل /cancel للإلغاء)*",
+        parse_mode="Markdown"
+    )
+    return WAITING_FOR_TOKEN
 
 async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_token = update.message.text.strip()
@@ -217,7 +228,7 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     owner_id = update.effective_user.id
 
     if ":" not in user_token or len(user_token) < 20:
-        await update.message.reply_text("❌ التوكن غير صحيح، تأكد منه من BotFather وأرسله مجدداً.")
+        await update.message.reply_text("❌ التوكن غير صحيح، تأكد منه من BotFather وأرسله مجدداً أو أرسل /cancel للإلغاء.")
         return WAITING_FOR_TOKEN
 
     await update.message.reply_text("⏳ جاري فحص التوكن وتشغيل البوت في الخلفية...")
@@ -234,7 +245,7 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("❌ تم إلغاء العملية.")
+    await update.message.reply_text(f"❌ تم إلغاء عملية إنشاء البوت.{RIGHTS}")
     return ConversationHandler.END
 
 async def my_bots_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -264,8 +275,9 @@ async def my_bots_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = Application.builder().token(MAIN_TOKEN).build()
 
+    # محادثة آمنة ومنفصلة لاستلام التوكن بعد اختيار القالب
     conv_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(handle_pagination, pattern="^tpl_")],
+        entry_points=[CallbackQueryHandler(template_select_callback, pattern="^tpl_")],
         states={
             WAITING_FOR_TOKEN: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, receive_token),
@@ -277,7 +289,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(check_sub_button, pattern="^check_sub$"))
-    app.add_handler(CallbackQueryHandler(handle_pagination, pattern="^(page_|noop|tpl_)"))
+    app.add_handler(CallbackQueryHandler(handle_pagination, pattern="^(page_|noop)$"))
     app.add_handler(conv_handler)
     app.add_handler(MessageHandler(filters.Regex("^(🤖 إنشاء بوت جديد|إنشاء بوت جديد)$"), show_templates))
     app.add_handler(MessageHandler(filters.Regex("^(📋 البوتات الخاصة بي|البوتات الخاصة بي)$"), my_bots_list))
@@ -285,6 +297,5 @@ def main():
     print("البوت الرئيسي ومحرك تشغيل البوتات يعملان بنجاح...")
     app.run_polling()
 
-if __name__ == "__main__":
+if __name__ == "main":
     main()
-    
