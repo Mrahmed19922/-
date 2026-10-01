@@ -1,13 +1,13 @@
 import logging
 import asyncio
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
-    MessageHandler,
     CallbackQueryHandler,
     ContextTypes,
     ConversationHandler,
+    MessageHandler,
     filters
 )
 
@@ -30,7 +30,20 @@ logging.basicConfig(
 # تخزين البوتات المشغلة في الذاكرة
 RUNNING_BOTS = {}
 
-# ------------------- قوائم قوالب البوتات (5 صفحات) -------------------
+# ------------------- القائمة الرئيسية وقوالب البوتات -------------------
+# القائمة الرئيسية للبوت
+MAIN_MENU = [
+    [InlineKeyboardButton("🤖 إنشاء بوت جديد", callback_data="menu_create")],
+    [InlineKeyboardButton("📋 البوتات الخاصة بي", callback_data="menu_my_bots")],
+    [InlineKeyboardButton("⚙️ إعدادات عامة لجميع البوتات", callback_data="menu_settings")],
+    [InlineKeyboardButton("📊 إحصائيات البوتات الخاصة بي", callback_data="menu_stats")],
+    [InlineKeyboardButton("🌐 تغيير اللغة", callback_data="menu_lang")],
+    [InlineKeyboardButton("🚀 قناة التحديثات", url=CHANNEL_LINK)],
+    [InlineKeyboardButton("❓ ما هو صانع خدمات ON.Mix؟", callback_data="menu_about"),
+     InlineKeyboardButton("📜 شروط الخدمة", callback_data="menu_terms")]
+]
+
+# قوالب البوتات (5 صفحات)
 TEMPLATES_PAGES = {
     1: [
         [InlineKeyboardButton("تواصل (شغال ✅)", callback_data="tpl_contact")],
@@ -40,7 +53,8 @@ TEMPLATES_PAGES = {
         [InlineKeyboardButton("تحويل صيغ", callback_data="tpl_convert")],
         [InlineKeyboardButton("استخراج روابط القنوات", callback_data="tpl_extract")],
         [InlineKeyboardButton("ناسخ الكتابة", callback_data="tpl_copy")],
-        [InlineKeyboardButton("➡️️ الصفحة التالية", callback_data="page_2")]
+        [InlineKeyboardButton("➡️ الصفحة التالية", callback_data="page_2")],
+        [InlineKeyboardButton("🔙 العودة للقائمة الرئيسية", callback_data="menu_main")]
     ],
     2: [
         [InlineKeyboardButton("سمسمي", callback_data="tpl_simsimi")],
@@ -53,7 +67,8 @@ TEMPLATES_PAGES = {
             InlineKeyboardButton("⬅️", callback_data="page_1"),
             InlineKeyboardButton("2/5", callback_data="noop"),
             InlineKeyboardButton("➡️", callback_data="page_3")
-        ]
+        ],
+        [InlineKeyboardButton("🔙 العودة للقائمة الرئيسية", callback_data="menu_main")]
     ],
     3: [
         [InlineKeyboardButton("البلورة السحرية", callback_data="tpl_ball")],
@@ -65,7 +80,8 @@ TEMPLATES_PAGES = {
             InlineKeyboardButton("⬅️", callback_data="page_2"),
             InlineKeyboardButton("3/5", callback_data="noop"),
             InlineKeyboardButton("➡️", callback_data="page_4")
-        ]
+        ],
+        [InlineKeyboardButton("🔙 العودة للقائمة الرئيسية", callback_data="menu_main")]
     ],
     4: [
         [InlineKeyboardButton("الجني الازرق", callback_data="tpl_akinator")],
@@ -76,7 +92,8 @@ TEMPLATES_PAGES = {
             InlineKeyboardButton("⬅️", callback_data="page_3"),
             InlineKeyboardButton("4/5", callback_data="noop"),
             InlineKeyboardButton("➡️", callback_data="page_5")
-        ]
+        ],
+        [InlineKeyboardButton("🔙 العودة للقائمة الرئيسية", callback_data="menu_main")]
     ],
     5: [
         [InlineKeyboardButton("بوت المسابقات", callback_data="tpl_contests")],
@@ -84,7 +101,8 @@ TEMPLATES_PAGES = {
         [
             InlineKeyboardButton("⬅️", callback_data="page_4"),
             InlineKeyboardButton("5/5", callback_data="noop")
-        ]
+        ],
+        [InlineKeyboardButton("🔙 العودة للقائمة الرئيسية", callback_data="menu_main")]
     ]
 }
 
@@ -166,31 +184,62 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_sub_request(update)
         return
 
-    main_keyboard = [
-        ["🤖 إنشاء بوت جديد", "📋 البوتات الخاصة بي"],
-        ["⚙️ إعدادات عامة لجميع البوتات"],
-        ["📊 إحصائيات البوتات الخاصة بي"],
-        ["🌐 تغيير اللغة"],
-        ["🚀 قناة التحديثات"],
-        ["❓ ما هو صانع خدمات ON.Mix؟", "📜 شروط الخدمة"]
-    ]
-    reply_markup = ReplyKeyboardMarkup(main_keyboard, resize_keyboard=True)
-
+    reply_markup = InlineKeyboardMarkup(MAIN_MENU)
     message_text = (
-        f"🚀 **أنشئ بوتك الآن بسهولة وسرعة!**\n"
-        f"اختر القالب، أضف التوكن، وسيكون البوت جاهزاً للعمل ⚡\n\n"
-        f"✨ **المميزات:**\n"
-        f"• بدون الحاجة إلى أكواد أو تعقيدات\n"
-        f"• قوالب ذكية وجاهزة\n"
-        f"• استضافة آمنة وفورية\n\n"
-        f"💡 **ابدأ الآن وصمم بوتك في أقل من نصف دقيقة!**{RIGHTS}"
+        f"🚀 **أهلاً بك يا صديقي في صانع خدمات ON.Mix!**\n"
+        f"اختر من القائمة أدناه ما تحتاجه للبدء فوراً ⚡\n\n{RIGHTS}"
     )
     await update.message.reply_text(text=message_text, reply_markup=reply_markup, parse_mode='Markdown')
 
-async def show_templates(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    reply_markup = InlineKeyboardMarkup(TEMPLATES_PAGES[1])
-    text = f"💡 **نصيحة:** اضغط على اسم الخدمة أو القالب لبدء إنشائه{RIGHTS}"
-    await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+# معالجة أزرار القائمة الرئيسية
+async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    if data == "menu_create":
+        reply_markup = InlineKeyboardMarkup(TEMPLATES_PAGES[1])
+        text = f"💡 **نصيحة:** اضغط على اسم الخدمة أو القالب لبدء إنشائه (الصفحة 1/5){RIGHTS}"
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+
+    elif data == "menu_my_bots":
+        user_id = str(query.from_user.id)
+        user_bots = []
+        try:
+            with open("user_bots.txt", "r") as f:
+                for line in f:
+                    if line.startswith(user_id + ":"):
+                        parts = line.strip().split(":")
+                        user_bots.append(parts[1])
+        except FileNotFoundError:
+            pass
+
+        if user_bots:
+            bots_text = "📋 **قائمة بوتاتك النشطة والمصنوعة:**\n\n"
+            for idx, bot_token in enumerate(user_bots, 1):
+                bots_text += f"{idx}. `...{bot_token[-10:]}` 🟢 (شغال)\n"
+            bots_text += f"{RIGHTS}"
+        else:
+            bots_text = f"❌ **ليس لديك أي بوتات مصنوعة حتى الآن.**\nاختر '🤖 إنشاء بوت جديد' لإضافة بوتك الأول!{RIGHTS}"
+
+        back_kb = [[InlineKeyboardButton("🔙 العودة للقائمة الرئيسية", callback_data="menu_main")]]
+        await query.edit_message_text(bots_text, reply_markup=InlineKeyboardMarkup(back_kb), parse_mode='Markdown')
+
+    elif data in ["menu_settings", "menu_stats", "menu_lang", "menu_about", "menu_terms"]:
+        messages = {
+            "menu_settings": "⚙️ إعدادات عامة لجميع البوتات قيد التطوير.",
+            "menu_stats": "📊 إحصائيات بوتاتك: إجمالي البوتات النشطة تعمل بكفاءة.",
+            "menu_lang": "🌐 اللغة الحالية: العربية.",
+            "menu_about": "❓ هذا البوت مخصص لإنشاء وإدارة خدمات وقوالب تليجرام بسهولة تامة عبر شبكة ON.Mix.",
+            "menu_terms": "📜 شروط الخدمة: يُمنع استخدام البوتات في أي أعمال مخالفة أو سبام."
+        }
+        back_kb = [[InlineKeyboardButton("🔙 العودة للقائمة الرئيسية", callback_data="menu_main")]]
+        await query.edit_message_text(f"{messages[data]}{RIGHTS}", reply_markup=InlineKeyboardMarkup(back_kb), parse_mode='Markdown')
+
+    elif data == "menu_main":
+        reply_markup = InlineKeyboardMarkup(MAIN_MENU)
+        text = f"🚀 **القائمة الرئيسية لصانع خدمات ON.Mix:**\n\nاختر ما تحتاجه للبدء:{RIGHTS}"
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
 
 # معالجة التنقل بين صفحات القوالب
 async def handle_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -248,30 +297,6 @@ async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text(f"❌ تم إلغاء عملية إنشاء البوت.{RIGHTS}")
     return ConversationHandler.END
 
-async def my_bots_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.effective_user.id)
-    user_bots = []
-    
-    try:
-        with open("user_bots.txt", "r") as f:
-            lines = f.readlines()
-            for line in lines:
-                if line.startswith(user_id + ":"):
-                    parts = line.strip().split(":")
-                    user_bots.append(parts[1])
-    except FileNotFoundError:
-        pass
-
-    if user_bots:
-        bots_text = "📋 **قائمة بوتاتك النشطة والمصنوعة:**\n\n"
-        for idx, bot_token in enumerate(user_bots, 1):
-            bots_text += f"{idx}. `...{bot_token[-10:]}` 🟢 (شغال)\n"
-        bots_text += f"{RIGHTS}"
-    else:
-        bots_text = f"❌ **ليس لديك أي بوتات مصنوعة حتى الآن.**\nيمكنك الضغط على '🤖 إنشاء بوت جديد' لإضافة بوتك الأول!{RIGHTS}"
-
-    await update.message.reply_text(bots_text, parse_message='Markdown')
-
 def main():
     app = Application.builder().token(MAIN_TOKEN).build()
 
@@ -288,16 +313,13 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(check_sub_button, pattern="^check_sub$"))
+    app.add_handler(CallbackQueryHandler(main_menu_callback, pattern="^menu_"))
     app.add_handler(CallbackQueryHandler(handle_pagination, pattern="^(page_|noop)$"))
     app.add_handler(conv_handler)
-    
-    # معالجات الأزرار النصية السفليّة بمرونة تامة
-    app.add_handler(MessageHandler(filters.Regex("إنشاء بوت جديد"), show_templates))
-    app.add_handler(MessageHandler(filters.Regex("البوتات الخاصة بي"), my_bots_list))
 
     print("البوت الرئيسي ومحرك تشغيل البوتات يعملان بنجاح...")
     app.run_polling()
 
 if __name__ == "__main__":
     main()
-        
+                
